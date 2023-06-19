@@ -1,0 +1,77 @@
+#!/bin/bash
+
+#
+# NekOps simulation utility
+#
+
+# 0.1) Check simulation arguments
+usage_message="USAGE: $0 [-n simulation_name] [-d simulation_directory] [-p number_of_processors]"
+
+while getopts 'hn:d:p:' option; do
+    case ${option} in
+        h)
+            echo ${usage_message}
+            exit 1
+            ;;
+
+        n)
+            SIMULATION_NAME=${OPTARG}
+            ;;
+
+        d)
+            DIRECTORY=${OPTARG}
+            ;;
+
+        p)
+            NUM_PROCS=${OPTARG}
+            ;;
+
+        *)
+            echo ${usage_message}
+            exit 1
+            ;;
+    esac
+done
+
+shift "$((${OPTIND} - 1))"
+
+if [[ -z ${SIMULATION_NAME} ]]; then
+    echo "ERROR: A simulation name that matches the files in the given directory must be provided"
+    echo ${usage_message}
+    exit 1
+fi
+
+if [[ -z ${DIRECTORY} ]]; then
+    echo "ERROR: A directory must be provided"
+    echo ${usage_message}
+    exit 1
+fi
+
+if [[ -n ${NUM_PROCS} ]]; then
+    if ! [[ ${NUM_PROCS} =~ ^[0-9]+$ ]]; then
+        echo "ERROR: The value passed to '-p' is not a number"
+        echo ${usage_message}
+        exit 1
+    fi
+else
+    NUM_PROCS=1
+fi
+
+# 0.2) Find container management system
+if [[ -x "$(command -v docker)" ]]; then
+    DOCKER=docker
+elif [[ -x "$(command -v podman)" ]]; then
+    DOCKER=podman
+else
+    echo "No container management software is available"
+    exit 1
+fi
+
+# 1) Check that the NekOps image is available, otherwise build it
+if [[ -z "$(${DOCKER} images -q localhost/nekops)" ]]; then
+    echo "Image 'localhost/nekops' doesn't exist. Using Dockerfile to build it"
+    ${DOCKER} build --tag localhost/nekops .
+fi
+
+# 2) Run Nek5000 simulation from the provided directory and generate visualization files
+${DOCKER} run -v ${DIRECTORY}:/simulation:Z localhost/nekops sh -c "./makenek ${SIMULATION_NAME} && nekmpi ${SIMULATION_NAME} ${NUM_PROCS} && visnek ${SIMULATION_NAME}"
