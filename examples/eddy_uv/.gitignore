@@ -1,0 +1,8 @@
+*.f*
+makefile
+nek5000
+obj/
+SESSION.NAME
+build.log
+*.nek5000
+.state
